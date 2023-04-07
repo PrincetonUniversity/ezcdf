@@ -1,0 +1,36 @@
+name: Build and Test
+
+on: [push]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: configure
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install gfortran
+        sudo apt-get -y install libnetcdf-dev libnetcdff-dev
+        curl -L -o nccmp-1.8.3.1.tar.gz https://gitlab.com/remikz/nccmp/-/archive/1.8.3.1/nccmp-1.8.3.1.tar.gz
+        tar -xzf nccmp-1.8.3.1.tar.gz
+        cd nccmp-1.8.3.1
+        chmod +x ./configure
+        ./configure && make && sudo make install
+    - name: build
+      run: |
+        make
+	PREFIX=`pwd` ; make install
+    - name: eztest
+      run: |
+        export LD_LIBRARY_PATH=`pwd`/lib:$LD_LIBRARY_PATH
+	./eztest
+        nccmp -dmgfsSq bigFile.nc ref/bigFile.nc
+	nccmp -dmgfsSq EZtest.nc ref/EZtest.nc
+	nccmp -dmgfsSq EZtest2.nc ref/EZtest2.nc
+	nccmp -dmgfsSq EZtest3.nc ref/EZtest3.nc
+    - name: eztest2
+      run: |
+        export LD_LIBRARY_PATH=`pwd`/lib:$LD_LIBRARY_PATH
+	./eztest2
+	nccmp -dmgfsSq EZtest2.cdf ref/EZtest2.cdf
