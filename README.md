@@ -33,7 +33,7 @@ Sources to build libezcdf.a or libezcdf.so and f90 modules:
    handle_err.f90
 
 Test programs:  
-   eztest.f90 and its sample output EZsample.nc  
+   eztest.f90
    eztest2.cc, ezcdf.hh: This is an example how to call ezcdf from a C++ program.
 
 
