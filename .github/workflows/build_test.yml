@@ -20,11 +20,11 @@ jobs:
     - name: build
       run: |
         make
-	PREFIX=`pwd` ; make install
+        PREFIX=`pwd` make install
     - name: eztest
       run: |
         export LD_LIBRARY_PATH=`pwd`/lib:$LD_LIBRARY_PATH
-	./eztest
+        ./eztest
         nccmp -dmgfsSq bigFile.nc ref/bigFile.nc
 	nccmp -dmgfsSq EZtest.nc ref/EZtest.nc
 	nccmp -dmgfsSq EZtest2.nc ref/EZtest2.nc
@@ -32,5 +32,5 @@ jobs:
     - name: eztest2
       run: |
         export LD_LIBRARY_PATH=`pwd`/lib:$LD_LIBRARY_PATH
-	./eztest2
+        ./eztest2
 	nccmp -dmgfsSq EZtest2.cdf ref/EZtest2.cdf
