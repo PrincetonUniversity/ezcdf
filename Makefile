@@ -2,13 +2,8 @@
 
 SHELL:=/bin/bash
 
-FLIBS =
-FINCL =
-
-ifneq (,$(shell which nf-config))
-        FINCL += -I`nf-config --includedir`
-        FLIBS += `nf-config --flibs`
-endif
+FINCL = -I`nf-config --includedir`
+FLIBS = `nc-config --libs` `nf-config --flibs`
 
 ifneq (,$(findstring icc, $(CC)))
         FFLAGS = -O2 -nowarn -ftz -traceback -heap-arrays 20 -fPIC
@@ -66,16 +61,16 @@ OBJS :=	$(SRCS:.f90=.o)
 all:	$(LIBAR) $(LIBSO) eztest eztest2
 
 $(LIBAR): $(OBJS)
-	@ar r $@ $(OBJS)
+	ar r $@ $(OBJS)
 
 $(LIBSO): $(OBJS)
-	@$(FC) -shared -o $(LIBSO) $(OBJS)
+	$(FC) -shared -o $(LIBSO) $(OBJS)
 
 eztest:
-	@$(FC) $(FFLAGS) $@.f90 -o $@ -L$(SRCDIR) -lezcdf $(FLIBS)
+	$(FC) $(FFLAGS) $@.f90 -o $@ -L$(SRCDIR) -lezcdf $(FLIBS)
 
 eztest2:
-	@$(CXX) $(CXXFLAGS) $@.cc -o $@ $(CXXLIBS) -L$(SRCDIR) -lezcdf $(FLIBS)
+	$(CXX) $(CXXFLAGS) $@.cc -o $@ $(CXXLIBS) -L$(SRCDIR) -lezcdf $(FLIBS)
 
 install:
 	@test -d $(LIBDIR) || mkdir -p $(LIBDIR)
@@ -92,7 +87,7 @@ install:
 
 $(OBJS) :
 %.o: %.f90
-	@$(FC) -c $(FFLAGS) $< -o $@ $(FINCL)
+	$(FC) -c $(FFLAGS) $< -o $@ $(FINCL)
 
 uninstall:
 	@rm -rf $(PREFIX)
