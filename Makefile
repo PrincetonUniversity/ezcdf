@@ -2,7 +2,7 @@
 
 SHELL:=/bin/bash
 
-FINCL = -I`nf-config --includedir`
+FINCL = -I`nf-config --includedir` -I`nc-config --includedir`
 FLIBS = `nc-config --libs` `nf-config --flibs`
 
 ifneq (,$(findstring icc, $(CC)))
