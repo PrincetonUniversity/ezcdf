@@ -129,10 +129,13 @@ EZcdf::EZcdf(const string fname_in, const string m="r"){
   
 /* D'tor */
 
-EZcdf::~EZcdf() {
+EZcdf::~EZcdf() noexcept {
   EZcdf::ier = nc_close(ncid);
   if(EZcdf::ier != NC_NOERR) {
-    throw EZcdf_Error(EZcdf_ErrCls);
+    // Do not throw from destructor.
+    // Optionally print warning or store error code.
+    std::cerr << "EZcdf warning: failed to close NetCDF file: "
+              << nc_strerror(EZcdf::ier) << std::endl;
   }
 }
 
