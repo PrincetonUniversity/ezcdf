@@ -1,0 +1,368 @@
+#!/bin/bash
+#
+# ============================================================================
+# EZCDF environment
+#
+# PPPL Ranger
+# GCC Toolset 13 / GCC 13.3.0
+# OpenMPI system RPM
+# HDF5 / NetCDF system RPM libraries
+#
+# Source from a shell started with:
+#
+#     scl enable gcc-toolset-13 bash
+#
+# Then:
+#
+#     source environ
+#     make show
+#     make
+#     make install
+#
+# Used with the common, machine-independent EZCDF Makefile.
+# ============================================================================
+
+
+# ============================================================================
+# GCC Toolset 13
+# ============================================================================
+
+export GCC_ROOT=/opt/rh/gcc-toolset-13/root/usr
+
+export PATH="${GCC_ROOT}/bin:${PATH}"
+
+hash -r
+
+export GCC_RUNTIME_ROOT="${GCC_ROOT}"
+
+
+# ============================================================================
+# Compilers
+# ============================================================================
+
+export FC=gfortran
+export F90=gfortran
+export CC=gcc
+export CXX=g++
+
+
+# ============================================================================
+# GCC runtime
+#
+# Determine the actual GCC 13.3.0 Fortran runtime location from the active
+# compiler rather than assuming a fixed GCC Toolset directory.
+# ============================================================================
+
+export FLIBROOT="$(
+    dirname "$(gfortran -print-file-name=libgfortran.so)"
+)"
+
+
+# ============================================================================
+# OpenMPI
+#
+# Ranger uses the system RPM OpenMPI installation.
+# ============================================================================
+
+export OPENMPI_HOME=/usr/lib64/openmpi
+
+export PATH="${OPENMPI_HOME}/bin:${PATH}"
+
+export MPIF90="${OPENMPI_HOME}/bin/mpif90"
+export MPIFC="${OPENMPI_HOME}/bin/mpifort"
+export MPICC="${OPENMPI_HOME}/bin/mpicc"
+export MPICXX="${OPENMPI_HOME}/bin/mpicxx"
+
+export FORTRAN_COMMAND="${MPIF90}"
+export CC_COMMAND="${MPICC}"
+export CX_COMMAND="${MPICXX}"
+
+
+# ============================================================================
+# HDF5 / NetCDF
+#
+# Ranger uses system RPM installations under /usr.
+# ============================================================================
+
+export HDF5_HOME=/usr
+
+export NETCDF_C_HOME=/usr
+export NETCDF_F_HOME=/usr
+export NETCDF_FORTRAN_HOME=/usr
+
+
+# ============================================================================
+# NetCDF Fortran modules
+#
+# Ranger RPM packages install the gfortran module files here.
+#
+# This directory should contain:
+#
+#     netcdf.mod
+#     netcdf4_f03.mod
+#     ...
+# ============================================================================
+
+export NETCDF_MODDIR=/usr/lib64/gfortran/modules
+
+
+# ============================================================================
+# Compiler flags
+#
+# These are consumed directly by the common EZCDF Makefile.
+#
+# -fPIC
+#     Required because the same objects are used in libezcdf.so.
+#
+# -fallow-argument-mismatch
+# -fallow-invalid-boz
+# -fno-range-check
+# -fdollar-ok
+#     Compatibility options for legacy Fortran source.
+#
+# No Ranger CPU-specific -march option is used here.  This keeps the EZCDF
+# installation usable across Ranger nodes.
+# ============================================================================
+
+export FFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC \
+-fallow-argument-mismatch \
+-fallow-invalid-boz \
+-fno-range-check \
+-fdollar-ok"
+
+
+export CFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC"
+
+
+export CXXFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC"
+
+
+# ============================================================================
+# General linker flags
+# ============================================================================
+
+export LDFLAGS=""
+
+
+# ============================================================================
+# HDF5 libraries
+#
+# Ranger system RPM installation.
+# ============================================================================
+
+export L_HDF5="\
+-Wl,-rpath,${HDF5_HOME}/lib64 \
+-L${HDF5_HOME}/lib64 \
+-lhdf5_fortran \
+-lhdf5hl_fortran \
+-lhdf5_hl \
+-lhdf5"
+
+
+# ============================================================================
+# NetCDF / HDF5 libraries
+#
+# L_NETCDF is deliberately complete because the common EZCDF Makefile does
+# not contain machine-specific knowledge of the NetCDF/HDF5 installation.
+#
+# Ranger layout:
+#
+#     NetCDF Fortran : /usr/lib64
+#     NetCDF C       : /usr/lib64
+#     HDF5           : /usr/lib64
+#
+# RPATH is included so libezcdf.so can locate the corresponding libraries
+# without depending entirely on LD_LIBRARY_PATH.
+# ============================================================================
+
+export L_NETCDF="\
+-Wl,-rpath,${NETCDF_F_HOME}/lib64 \
+-L${NETCDF_F_HOME}/lib64 \
+-lnetcdff \
+-Wl,-rpath,${NETCDF_C_HOME}/lib64 \
+-L${NETCDF_C_HOME}/lib64 \
+-lnetcdf \
+-Wl,-rpath,${HDF5_HOME}/lib64 \
+-L${HDF5_HOME}/lib64 \
+-lhdf5_fortran \
+-lhdf5hl_fortran \
+-lhdf5_hl \
+-lhdf5 \
+-lm"
+
+
+# ============================================================================
+# GNU Fortran runtime
+# ============================================================================
+
+export L_FLIBS="\
+-Wl,-rpath,${FLIBROOT} \
+-L${FLIBROOT} \
+-lgfortran \
+-lm"
+
+
+# ============================================================================
+# GNU C/C++ runtime
+#
+# Required by the C++ EZCDF test executable when linking against the
+# Fortran EZCDF library.
+# ============================================================================
+
+export L_CLIBS="\
+-Wl,-rpath,${FLIBROOT} \
+-L${FLIBROOT} \
+-lstdc++ \
+-lgfortran \
+-lgcc_s \
+-lgcc"
+
+
+# ============================================================================
+# Runtime shared-library search path
+#
+# IMPORTANT:
+#
+# GCC Toolset libraries come before /usr/lib64 so the GCC 13 runtime is
+# selected instead of an incompatible system compiler runtime.
+#
+# Search order:
+#
+#     GCC Toolset
+#     GCC Fortran runtime
+#     OpenMPI
+#     HDF5 / NetCDF
+#     existing LD_LIBRARY_PATH
+# ============================================================================
+
+export LD_LIBRARY_PATH="\
+${GCC_ROOT}/lib64:\
+${GCC_ROOT}/lib:\
+${FLIBROOT}:\
+${OPENMPI_HOME}/lib:\
+${HDF5_HOME}/lib64:\
+${NETCDF_C_HOME}/lib64:\
+${NETCDF_F_HOME}/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+
+# ============================================================================
+# Link-time library search path
+#
+# As with LD_LIBRARY_PATH, GCC Toolset libraries must precede system
+# libraries.
+# ============================================================================
+
+export LIBRARY_PATH="\
+${GCC_ROOT}/lib64:\
+${GCC_ROOT}/lib:\
+${FLIBROOT}:\
+${OPENMPI_HOME}/lib:\
+${HDF5_HOME}/lib64:\
+${NETCDF_C_HOME}/lib64:\
+${NETCDF_F_HOME}/lib64${LIBRARY_PATH:+:${LIBRARY_PATH}}"
+
+
+# ============================================================================
+# Include search path
+#
+# OpenMPI headers are retained for compatibility with the wider Ranger
+# environment even though EZCDF itself does not require MPI.
+# ============================================================================
+
+export CPATH="\
+/usr/include/openmpi-x86_64:\
+/usr/include${CPATH:+:${CPATH}}"
+
+
+# ============================================================================
+# Build/install location
+#
+# PREFIX may be exported before sourcing this file:
+#
+#     export PREFIX=/u/mgorelen/transp_external/opt/ezcdf/0.0.3/gcc/13.3.0
+#     source environ
+#
+# Otherwise the common Makefile defaults to:
+#
+#     $(CURDIR)/builds
+# ============================================================================
+
+
+# ============================================================================
+# Environment summary
+# ============================================================================
+
+echo
+echo "============================================================"
+echo " EZCDF environment -- Ranger / GCC 13.3.0"
+echo "============================================================"
+echo
+
+echo "Compilers:"
+echo "  FC               = ${FC}"
+echo "  CC               = ${CC}"
+echo "  CXX              = ${CXX}"
+echo "  MPIF90           = ${MPIF90}"
+echo "  MPICC            = ${MPICC}"
+echo "  MPICXX           = ${MPICXX}"
+echo
+
+echo "Compiler versions:"
+echo "  $(gfortran --version | head -1)"
+echo "  $(gcc --version | head -1)"
+echo
+
+echo "GCC runtime:"
+echo "  GCC_ROOT         = ${GCC_ROOT}"
+echo "  GCC_RUNTIME_ROOT = ${GCC_RUNTIME_ROOT}"
+echo "  FLIBROOT         = ${FLIBROOT}"
+echo
+
+echo "OpenMPI:"
+echo "  OPENMPI_HOME     = ${OPENMPI_HOME}"
+echo
+
+echo "NetCDF:"
+echo "  NETCDF_F_HOME    = ${NETCDF_F_HOME}"
+echo "  NETCDF_C_HOME    = ${NETCDF_C_HOME}"
+echo "  NETCDF_MODDIR    = ${NETCDF_MODDIR}"
+echo
+
+echo "HDF5:"
+echo "  HDF5_HOME        = ${HDF5_HOME}"
+echo
+
+echo "Compiler flags:"
+echo "  FFLAGS           = ${FFLAGS}"
+echo "  CFLAGS           = ${CFLAGS}"
+echo "  CXXFLAGS         = ${CXXFLAGS}"
+echo
+
+echo "Libraries:"
+echo "  L_NETCDF         = ${L_NETCDF}"
+echo "  L_HDF5           = ${L_HDF5}"
+echo "  L_FLIBS          = ${L_FLIBS}"
+echo "  L_CLIBS          = ${L_CLIBS}"
+echo
+
+echo "LD_LIBRARY_PATH:"
+echo "  ${LD_LIBRARY_PATH}"
+echo
+
+echo "LIBRARY_PATH:"
+echo "  ${LIBRARY_PATH}"
+echo
+
+echo "============================================================"
