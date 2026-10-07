@@ -2,8 +2,25 @@
 
 SHELL:=/bin/bash
 
-FINCL = -I`nf-config --includedir` -I`nc-config --includedir`
-FLIBS = `nc-config --libs` `nf-config --flibs`
+NC_CONFIG_OK := $(shell command -v nc-config >/dev/null 2>&1 && echo yes || echo no)
+NF_CONFIG_OK := $(shell command -v nf-config >/dev/null 2>&1 && echo yes || echo no)
+
+ifeq ($(NC_CONFIG_OK),yes)
+  FINCL = -I$(shell nc-config --includedir)
+  FLIBS = -L$(shell nc-config --libdir) -lnetcdf
+else
+  FINCL = -I$(NETCDF_ROOT)/include
+  FLIBS = -L$(NETCDF_ROOT)/lib -lnetcdf
+  $(warning nc-config not found; using NETCDF_ROOT from environment/command line.)
+endif
+ifeq ($(NF_CONFIG_OK),yes)
+  FINCL += -I$(shell nf-config --includedir)
+  FLIBS += -L$(shell nf-config --prefix)/lib -lnetcdff
+else
+  FINCL += -I$(NETCDF_ROOT)/include
+  FLIBS += -L$(NETCDF_ROOT)/lib -lnetcdff
+  $(warning nf-config not found; using NETCDF_ROOT from environment/command line.)
+endif
 
 ifneq (,$(findstring icc, $(CC)))
         FFLAGS = -O2 -nowarn -ftz -traceback -heap-arrays 20 -fPIC
@@ -20,7 +37,7 @@ else ifneq (,$(findstring pgcc, $(CC)))
 else
         FC = gfortran
 	CC = gcc
-        FFLAGS = -g -O2 -m64 -ffpe-trap=invalid,zero,overflow -fno-range-check -fdollar-ok -fPIC
+        FFLAGS = -g -O3 -m64 -fno-range-check -fdollar-ok -fPIC
 	GCCVERSION = $(shell gcc -dumpversion | cut -f1 -d.)
 ifeq ($(shell test $(GCCVERSION) -gt 9; echo $$?),0)
 	FFLAGS += -fallow-argument-mismatch
@@ -70,7 +87,7 @@ eztest:
 	$(FC) $(FFLAGS) $@.f90 -o $@ -L$(SRCDIR) -lezcdf $(FLIBS)
 
 eztest2:
-	$(CXX) $(CXXFLAGS) $@.cc -o $@ $(CXXLIBS) -L$(SRCDIR) -lezcdf $(FLIBS)
+	$(CXX) $(CXXFLAGS) $(FINCL) $@.cc -o $@ $(CXXLIBS) -L$(SRCDIR) -lezcdf $(FLIBS)
 
 install:
 	@test -d $(LIBDIR) || mkdir -p $(LIBDIR)
