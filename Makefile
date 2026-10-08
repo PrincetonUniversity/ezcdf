@@ -1,6 +1,28 @@
 # ezcdf makefile
 
-SHELL:=/bin/bash
+SHELL := /bin/bash
+
+# ---------------------------------------------------------------------------
+# NetCDF installation paths
+# ---------------------------------------------------------------------------
+
+ifeq ($(strip $(NETCDF_C_HOME)),)
+NETCDF_C_HOME := $(shell nc-config --prefix 2>/dev/null)
+endif
+
+ifeq ($(strip $(NETCDF_F_HOME)),)
+NETCDF_F_HOME := $(shell nf-config --prefix 2>/dev/null)
+endif
+
+ifeq ($(strip $(NETCDF_ROOT)),)
+NETCDF_ROOT := $(NETCDF_C_HOME)
+endif
+
+export NETCDF_C_HOME NETCDF_F_HOME NETCDF_ROOT
+
+# ---------------------------------------------------------------------------
+# NetCDF configuration
+# ---------------------------------------------------------------------------
 
 NC_CONFIG_OK := $(shell command -v nc-config >/dev/null 2>&1 && echo yes || echo no)
 NF_CONFIG_OK := $(shell command -v nf-config >/dev/null 2>&1 && echo yes || echo no)
@@ -13,6 +35,7 @@ else
   FLIBS = -L$(NETCDF_ROOT)/lib -lnetcdf
   $(warning nc-config not found; using NETCDF_ROOT from environment/command line.)
 endif
+
 ifeq ($(NF_CONFIG_OK),yes)
   FINCL += -I$(shell nf-config --includedir)
   FLIBS += -L$(shell nf-config --prefix)/lib -lnetcdff
@@ -21,6 +44,10 @@ else
   FLIBS += -L$(NETCDF_ROOT)/lib -lnetcdff
   $(warning nf-config not found; using NETCDF_ROOT from environment/command line.)
 endif
+
+# ---------------------------------------------------------------------------
+# Compiler flags
+# ---------------------------------------------------------------------------
 
 ifneq (,$(findstring icc, $(CC)))
         FFLAGS = -O2 -nowarn -ftz -traceback -heap-arrays 20 -fPIC
@@ -36,18 +63,23 @@ else ifneq (,$(findstring pgcc, $(CC)))
 
 else
         FC = gfortran
-	CC = gcc
+        CC = gcc
         FFLAGS = -g -O3 -m64 -fno-range-check -fdollar-ok -fPIC
-	GCCVERSION = $(shell gcc -dumpversion | cut -f1 -d.)
+        GCCVERSION = $(shell gcc -dumpversion | cut -f1 -d.)
+
 ifeq ($(shell test $(GCCVERSION) -gt 9; echo $$?),0)
-	FFLAGS += -fallow-argument-mismatch
+        FFLAGS += -fallow-argument-mismatch
 endif
+
         DFFLAGS = -Og -Wall
         CXXFLAGS = -O2
         CXXLIBS = -lstdc++ -lgfortran
 endif
 
+# ---------------------------------------------------------------------------
 # Define directories and library names
+# ---------------------------------------------------------------------------
+
 SRCDIR := $(shell pwd)
 
 PREFIX := $(or $(PREFIX),$(SRCDIR)/builds)
@@ -62,20 +94,27 @@ LIBSO := libezcdf.so
 EXEF90 := eztest
 EXECXX := eztest2
 
-# Define the objects
-SRCS :=	ezcdf_inqvar.f90 \
-	ezcdf_opncls.f90 \
-	ezcdf_attrib.f90 \
-	ezcdf_genget.f90 \
-	ezcdf_genput.f90 \
-	ezcdf.f90 \
-	handle_err.f90
-OBJS :=	$(SRCS:.f90=.o)
+# ---------------------------------------------------------------------------
+# Define objects
+# ---------------------------------------------------------------------------
 
+SRCS := ezcdf_inqvar.f90 \
+        ezcdf_opncls.f90 \
+        ezcdf_attrib.f90 \
+        ezcdf_genget.f90 \
+        ezcdf_genput.f90 \
+        ezcdf.f90 \
+        handle_err.f90
+
+OBJS := $(SRCS:.f90=.o)
 
 .PHONY: clean clobber install uninstall
 
-all:	$(LIBAR) $(LIBSO) eztest eztest2
+# ---------------------------------------------------------------------------
+# Build libraries and executables
+# ---------------------------------------------------------------------------
+
+all: $(LIBAR) $(LIBSO) eztest eztest2
 
 $(LIBAR): $(OBJS)
 	ar r $@ $(OBJS)
@@ -88,6 +127,10 @@ eztest:
 
 eztest2:
 	$(CXX) $(CXXFLAGS) $(FINCL) $@.cc -o $@ $(CXXLIBS) -L$(SRCDIR) -lezcdf $(FLIBS)
+
+# ---------------------------------------------------------------------------
+# Install
+# ---------------------------------------------------------------------------
 
 install:
 	@test -d $(LIBDIR) || mkdir -p $(LIBDIR)
@@ -102,9 +145,18 @@ install:
 	@test ! -f $(EXEF90) || cp $(EXEF90) $(BINDIR)
 	@test ! -f $(EXECXX) || cp $(EXECXX) $(BINDIR)
 
-$(OBJS) :
+# ---------------------------------------------------------------------------
+# Compile objects
+# ---------------------------------------------------------------------------
+
+$(OBJS):
+
 %.o: %.f90
 	$(FC) -c $(FFLAGS) $< -o $@ $(FINCL)
+
+# ---------------------------------------------------------------------------
+# Uninstall / Clean
+# ---------------------------------------------------------------------------
 
 uninstall:
 	@rm -rf $(PREFIX)
