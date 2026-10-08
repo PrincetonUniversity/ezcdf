@@ -1,0 +1,233 @@
+#!/bin/bash
+#
+# ============================================================================
+# EZCDF environment
+#
+# PPPL Flux
+# GCC 13.2.0
+# OpenMPI 4.1.6
+#
+# Used with the common, machine-independent EZCDF Makefile.
+#
+# Usage:
+#
+#     source environ
+#     make show
+#     make
+#     make install
+#
+# ============================================================================
+
+
+# ============================================================================
+# Modules
+# ============================================================================
+
+module purge
+
+module load gcc/13.2.0-gcc-11.4.1-wykjv
+module load openmpi/4.1.6-gcc-13.2.0
+
+module load openmpi-4.1.6/gcc-13.2.0/netcdf-c/main-4adke
+module load openmpi-4.1.6/gcc-13.2.0/netcdf-fortran/4.6.1-53pdx
+
+
+# ============================================================================
+# Compilers
+# ============================================================================
+
+export FC=gfortran
+export F90=gfortran
+export CC=gcc
+export CXX=g++
+
+
+# ============================================================================
+# GCC runtime
+#
+# Determine the runtime location from the active GCC compiler rather than
+# depending on the value or format of F77.
+# ============================================================================
+
+export FLIBROOT="$(
+    dirname "$(gfortran -print-file-name=libgfortran.so)"
+)"
+
+
+# ============================================================================
+# NetCDF
+#
+# NETCDF_C_HOME and NETCDF_F_HOME are supplied by the loaded modules.
+#
+# On Flux:
+#
+#     libnetcdff.so -> ${NETCDF_F_HOME}/lib
+#     libnetcdf.so  -> ${NETCDF_C_HOME}/lib64
+# ============================================================================
+
+export NETCDF_FORTRAN_HOME="${NETCDF_F_HOME}"
+
+export NETCDF_MODDIR="${NETCDF_F_HOME}/include"
+
+
+# ============================================================================
+# Compiler flags
+#
+# These are supplied to the common EZCDF Makefile.
+#
+# -fPIC is required because the same objects are used for both:
+#
+#     libezcdf.a
+#     libezcdf.so
+#
+# The remaining legacy Fortran compatibility flags are required by the
+# existing EZCDF source when compiling with modern gfortran.
+# ============================================================================
+
+export FFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC \
+-fallow-argument-mismatch \
+-fno-range-check \
+-fdollar-ok"
+
+
+export CFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC"
+
+
+export CXXFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC"
+
+
+# ============================================================================
+# General linker flags
+# ============================================================================
+
+export LDFLAGS=""
+
+
+# ============================================================================
+# NetCDF libraries
+#
+# Do not rely on nf-config --flibs alone on Flux because the NetCDF Fortran
+# configuration does not necessarily provide the NetCDF C library search
+# directory required by this installation.
+#
+# Embed RPATH entries for both NetCDF Fortran and NetCDF C so libezcdf.so
+# can find the exact libraries used when it was built.
+# ============================================================================
+
+export L_NETCDF="\
+-Wl,-rpath,${NETCDF_F_HOME}/lib \
+-L${NETCDF_F_HOME}/lib \
+-lnetcdff \
+-Wl,-rpath,${NETCDF_C_HOME}/lib64 \
+-L${NETCDF_C_HOME}/lib64 \
+-lnetcdf \
+-lm"
+
+
+# ============================================================================
+# GNU Fortran runtime
+# ============================================================================
+
+export L_FLIBS="\
+-Wl,-rpath,${FLIBROOT} \
+-L${FLIBROOT} \
+-lgfortran \
+-lm"
+
+
+# ============================================================================
+# GNU C/C++ runtime
+#
+# Required by the C++ test executable when linking against Fortran EZCDF.
+# ============================================================================
+
+export L_CLIBS="\
+-Wl,-rpath,${FLIBROOT} \
+-L${FLIBROOT} \
+-lstdc++ \
+-lgfortran \
+-lgcc_s \
+-lgcc"
+
+
+# ============================================================================
+# Runtime library search path
+# ============================================================================
+
+export LD_LIBRARY_PATH="\
+${NETCDF_F_HOME}/lib:\
+${NETCDF_C_HOME}/lib64:\
+${FLIBROOT}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+
+# ============================================================================
+# Build/install location
+#
+# PREFIX may be set before sourcing this environment:
+#
+#     export PREFIX=/some/install/location
+#     source environ
+#
+# Otherwise the common Makefile uses:
+#
+#     $(CURDIR)/builds
+#
+# ============================================================================
+
+
+# ============================================================================
+# Environment summary
+# ============================================================================
+
+echo
+echo "============================================================"
+echo " EZCDF environment -- Flux / GCC 13.2.0"
+echo "============================================================"
+echo
+
+echo "Compilers:"
+echo "  FC              = ${FC}"
+echo "  CC              = ${CC}"
+echo "  CXX             = ${CXX}"
+echo
+
+echo "Compiler versions:"
+echo "  $(gfortran --version | head -1)"
+echo "  $(gcc --version | head -1)"
+echo
+
+echo "NetCDF:"
+echo "  NETCDF_F_HOME   = ${NETCDF_F_HOME}"
+echo "  NETCDF_C_HOME   = ${NETCDF_C_HOME}"
+echo "  NETCDF_MODDIR   = ${NETCDF_MODDIR}"
+echo
+
+echo "GCC runtime:"
+echo "  FLIBROOT        = ${FLIBROOT}"
+echo
+
+echo "Compiler flags:"
+echo "  FFLAGS          = ${FFLAGS}"
+echo "  CFLAGS          = ${CFLAGS}"
+echo "  CXXFLAGS        = ${CXXFLAGS}"
+echo
+
+echo "Libraries:"
+echo "  L_NETCDF        = ${L_NETCDF}"
+echo "  L_FLIBS         = ${L_FLIBS}"
+echo "  L_CLIBS         = ${L_CLIBS}"
+echo
+
+echo "============================================================"

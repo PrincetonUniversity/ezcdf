@@ -1,0 +1,315 @@
+# ---------------------------------------------------------------------------
+# EZCDF Makefile
+#
+# Flux GCC 13.2.0
+#
+# Required environment/modules:
+#
+#   module load gcc/13.2.0-gcc-11.4.1-wykjv
+#   module load openmpi/4.1.6-gcc-13.2.0
+#   module load openmpi-4.1.6/gcc-13.2.0/netcdf-c/main-4adke
+#   module load openmpi-4.1.6/gcc-13.2.0/netcdf-fortran/4.6.1-53pdx
+#
+# The NetCDF modules define:
+#
+#   NETCDF_C_HOME
+#   NETCDF_F_HOME
+#
+# ---------------------------------------------------------------------------
+
+SHELL := /bin/bash
+
+
+# ---------------------------------------------------------------------------
+# Compilers
+# ---------------------------------------------------------------------------
+
+FC  := gfortran
+CC  := gcc
+CXX := g++
+
+
+# ---------------------------------------------------------------------------
+# Build configuration
+# ---------------------------------------------------------------------------
+
+ifndef DEBUG
+	DEBUG := 0
+endif
+
+
+# ---------------------------------------------------------------------------
+# NetCDF configuration
+#
+# On Flux:
+#
+#   libnetcdff.so -> $(NETCDF_F_HOME)/lib
+#   libnetcdf.so  -> $(NETCDF_C_HOME)/lib64
+#
+# Do not rely on "nf-config --flibs" alone because on Flux it does not
+# include the -L path needed to locate libnetcdf.so.
+# ---------------------------------------------------------------------------
+
+FINCL := \
+	-I$(NETCDF_F_HOME)/include \
+	-I$(NETCDF_C_HOME)/include
+
+NETCDF_F_LIBDIR := $(NETCDF_F_HOME)/lib
+NETCDF_C_LIBDIR := $(NETCDF_C_HOME)/lib64
+
+L_NETCDF := \
+	-L$(NETCDF_F_LIBDIR) \
+	-lnetcdff \
+	-L$(NETCDF_C_LIBDIR) \
+	-lnetcdf \
+	-lm
+
+NETCDF_RPATH := \
+	-Wl,-rpath,$(NETCDF_F_LIBDIR) \
+	-Wl,-rpath,$(NETCDF_C_LIBDIR)
+
+
+# ---------------------------------------------------------------------------
+# Fortran compiler flags
+#
+# -c is intentionally NOT included in FFLAGS.
+# The object compilation rule explicitly supplies -c.
+#
+# -fPIC is required because these objects are linked into libezcdf.so.
+# ---------------------------------------------------------------------------
+
+FFLAGS_OPT := \
+	-g \
+	-O2 \
+	-m64 \
+	-fallow-argument-mismatch \
+	-fno-range-check \
+	-fdollar-ok \
+	-fPIC
+
+FFLAGS_DBG := \
+	-g \
+	-O0 \
+	-m64 \
+	-Wall \
+	-fcheck=all \
+	-fbacktrace \
+	-ffpe-trap=invalid,zero,overflow \
+	-fallow-argument-mismatch \
+	-fno-range-check \
+	-fdollar-ok \
+	-fPIC
+
+ifeq ($(DEBUG),0)
+	FFLAGS := $(FFLAGS_OPT)
+else
+	FFLAGS := $(FFLAGS_DBG)
+endif
+
+
+# ---------------------------------------------------------------------------
+# C++ compiler flags
+# ---------------------------------------------------------------------------
+
+CXXFLAGS_OPT := \
+	-g \
+	-O2 \
+	-m64
+
+CXXFLAGS_DBG := \
+	-g \
+	-O0 \
+	-m64 \
+	-Wall
+
+ifeq ($(DEBUG),0)
+	CXXFLAGS := $(CXXFLAGS_OPT)
+else
+	CXXFLAGS := $(CXXFLAGS_DBG)
+endif
+
+
+# ---------------------------------------------------------------------------
+# C++ / Fortran runtime libraries
+# ---------------------------------------------------------------------------
+
+CXXLIBS := \
+	-lstdc++ \
+	-lgfortran
+
+
+# ---------------------------------------------------------------------------
+# Installation directories
+# ---------------------------------------------------------------------------
+
+SRCDIR := $(CURDIR)
+
+PREFIX ?= $(SRCDIR)/builds
+
+LIBDIR := $(PREFIX)/lib
+INCDIR := $(PREFIX)/include
+MODDIR := $(PREFIX)/mod
+BINDIR := $(PREFIX)/bin
+
+
+# ---------------------------------------------------------------------------
+# Library and executable names
+# ---------------------------------------------------------------------------
+
+LIBAR := libezcdf.a
+LIBSO := libezcdf.so
+
+EXEF90 := eztest
+EXECXX := eztest2
+
+
+# ---------------------------------------------------------------------------
+# Sources and objects
+# ---------------------------------------------------------------------------
+
+SRCS := \
+	ezcdf_inqvar.f90 \
+	ezcdf_opncls.f90 \
+	ezcdf_attrib.f90 \
+	ezcdf_genget.f90 \
+	ezcdf_genput.f90 \
+	ezcdf.f90 \
+	handle_err.f90
+
+OBJS := $(SRCS:.f90=.o)
+
+
+# ---------------------------------------------------------------------------
+# Main targets
+# ---------------------------------------------------------------------------
+
+.PHONY: all clean clobber install uninstall
+
+all: $(LIBAR) $(LIBSO) $(EXEF90) $(EXECXX)
+
+
+# ---------------------------------------------------------------------------
+# Static library
+# ---------------------------------------------------------------------------
+
+$(LIBAR): $(OBJS)
+	@echo "Building EZCDF static library"
+	@rm -f $@
+	ar rcs $@ $(OBJS)
+
+
+# ---------------------------------------------------------------------------
+# Shared library
+#
+# NetCDF Fortran and NetCDF C are direct dependencies of libezcdf.so.
+#
+# Runtime paths are embedded so that libezcdf.so can locate the exact
+# NetCDF libraries used at build time.
+# ---------------------------------------------------------------------------
+
+$(LIBSO): $(OBJS)
+	@echo "Building EZCDF shared library"
+	@rm -f $@
+	$(FC) -shared \
+		-o $@ \
+		$(OBJS) \
+		$(L_NETCDF) \
+		$(NETCDF_RPATH)
+
+
+# ---------------------------------------------------------------------------
+# Fortran test executable
+# ---------------------------------------------------------------------------
+
+$(EXEF90): $(LIBSO) $(EXEF90).f90
+	@echo "Building $(EXEF90)"
+	$(FC) $(FFLAGS) \
+		$(EXEF90).f90 \
+		-o $@ \
+		-L$(SRCDIR) \
+		-lezcdf \
+		-Wl,-rpath,$(SRCDIR) \
+		$(L_NETCDF)
+
+
+# ---------------------------------------------------------------------------
+# C++ test executable
+# ---------------------------------------------------------------------------
+
+$(EXECXX): $(LIBSO) $(EXECXX).cc
+	@echo "Building $(EXECXX)"
+	$(CXX) $(CXXFLAGS) \
+		$(EXECXX).cc \
+		-o $@ \
+		$(FINCL) \
+		-L$(SRCDIR) \
+		-lezcdf \
+		-Wl,-rpath,$(SRCDIR) \
+		$(L_NETCDF) \
+		$(CXXLIBS)
+
+
+# ---------------------------------------------------------------------------
+# Fortran object compilation
+#
+# Explicit -c is required.  It is intentionally not supplied through
+# FFLAGS.
+# ---------------------------------------------------------------------------
+
+%.o: %.f90
+	$(FC) $(FFLAGS) -c $< -o $@ $(FINCL)
+
+
+# ---------------------------------------------------------------------------
+# Install
+# ---------------------------------------------------------------------------
+
+install: all
+	@echo "Installing EZCDF in $(PREFIX)"
+
+	@mkdir -p $(LIBDIR)
+	@mkdir -p $(INCDIR)
+	@mkdir -p $(MODDIR)
+	@mkdir -p $(BINDIR)
+
+	@cp ezcdf.hh $(INCDIR)
+	@cp *.mod $(MODDIR)
+
+	@if [ -d ref ]; then \
+		rm -rf $(PREFIX)/ref; \
+		cp -r ref $(PREFIX); \
+	fi
+
+	@cp $(LIBAR) $(LIBDIR)
+	@cp $(LIBSO) $(LIBDIR)
+	@cp $(EXEF90) $(BINDIR)
+	@cp $(EXECXX) $(BINDIR)
+
+
+# ---------------------------------------------------------------------------
+# Uninstall
+# ---------------------------------------------------------------------------
+
+uninstall:
+	@rm -rf $(PREFIX)
+
+
+# ---------------------------------------------------------------------------
+# Clean
+# ---------------------------------------------------------------------------
+
+clean:
+	@rm -f *~
+	@rm -f $(OBJS)
+	@rm -f *.mod
+
+
+# ---------------------------------------------------------------------------
+# Complete cleanup
+# ---------------------------------------------------------------------------
+
+clobber: clean
+	@rm -f $(LIBAR)
+	@rm -f $(LIBSO)
+	@rm -f $(EXEF90)
+	@rm -f $(EXECXX)

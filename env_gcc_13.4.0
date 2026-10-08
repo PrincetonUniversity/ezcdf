@@ -1,0 +1,267 @@
+#!/bin/bash
+#
+# ============================================================================
+# EZCDF environment
+#
+# PPPL Lynx
+# GCC 13.4.0
+# OpenMPI 5.0.10
+# HDF5 1.14.6
+# NetCDF-C 4.9.3
+# NetCDF-Fortran 4.6.2
+#
+# Used with the common, machine-independent EZCDF Makefile.
+#
+# Usage:
+#
+#     source environ
+#     make show
+#     make
+#     make install
+#
+# ============================================================================
+
+
+# ============================================================================
+# Modules
+# ============================================================================
+
+module purge
+
+module load gcc-runtime/13.4.0
+module load gcc/13.4.0
+
+module load openmpi/5.0.10-gcc-13.4.0
+
+module load hdf5/1.14.6-gcc-13.4.0
+
+module load netcdf-c/4.9.3-gcc-13.4.0
+module load netcdf-fortran/4.6.2-gcc-13.4.0
+
+
+# ============================================================================
+# Compilers
+# ============================================================================
+
+export FC=gfortran
+export F90=gfortran
+export CC=gcc
+export CXX=g++
+
+
+# ============================================================================
+# GCC runtime
+#
+# gcc-runtime/13.4.0 supplies GCC_RUNTIME_ROOT.
+#
+# Determine the actual libgfortran location from the active compiler rather
+# than assuming that it is always GCC_RUNTIME_ROOT/lib.
+# ============================================================================
+
+export FLIBROOT="$(
+    dirname "$(gfortran -print-file-name=libgfortran.so)"
+)"
+
+
+# ============================================================================
+# NetCDF / HDF5
+#
+# The loaded Lynx modules provide:
+#
+#     NETCDF_F_HOME
+#     NETCDF_C_HOME
+#     HDF5_HOME
+#
+# NetCDF Fortran module files are normally installed in the NetCDF Fortran
+# include directory on Lynx.
+# ============================================================================
+
+export NETCDF_FORTRAN_HOME="${NETCDF_F_HOME}"
+
+export NETCDF_MODDIR="${NETCDF_F_HOME}/include"
+
+
+# ============================================================================
+# Compiler flags
+#
+# These are supplied to the common EZCDF Makefile.
+#
+# -fPIC is required because the same Fortran objects are used for:
+#
+#     libezcdf.a
+#     libezcdf.so
+#
+# Legacy GNU Fortran compatibility flags are retained for the existing
+# EZCDF source.
+# ============================================================================
+
+export FFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC \
+-fallow-argument-mismatch \
+-fno-range-check \
+-fdollar-ok"
+
+
+export CFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC"
+
+
+export CXXFLAGS="\
+-g \
+-O2 \
+-m64 \
+-fPIC"
+
+
+# ============================================================================
+# General linker flags
+# ============================================================================
+
+export LDFLAGS=""
+
+
+# ============================================================================
+# NetCDF / HDF5 libraries
+#
+# Lynx library layout:
+#
+#     NetCDF Fortran : ${NETCDF_F_HOME}/lib
+#     NetCDF C       : ${NETCDF_C_HOME}/lib64
+#     HDF5           : ${HDF5_HOME}/lib
+#
+# RPATH entries are embedded so that libezcdf.so can locate the same
+# NetCDF/HDF5 libraries at runtime.
+# ============================================================================
+
+export L_NETCDF="\
+-Wl,-rpath,${NETCDF_F_HOME}/lib \
+-L${NETCDF_F_HOME}/lib \
+-lnetcdff \
+-Wl,-rpath,${NETCDF_C_HOME}/lib64 \
+-L${NETCDF_C_HOME}/lib64 \
+-lnetcdf \
+-Wl,-rpath,${HDF5_HOME}/lib \
+-L${HDF5_HOME}/lib \
+-lhdf5_fortran \
+-lhdf5hl_fortran \
+-lhdf5_hl \
+-lhdf5 \
+-lm"
+
+
+# ============================================================================
+# GNU Fortran runtime
+# ============================================================================
+
+export L_FLIBS="\
+-Wl,-rpath,${FLIBROOT} \
+-L${FLIBROOT} \
+-lgfortran \
+-lm"
+
+
+# ============================================================================
+# GNU C/C++ runtime
+#
+# Required when the C++ EZCDF test program links against the Fortran EZCDF
+# library.
+# ============================================================================
+
+export L_CLIBS="\
+-Wl,-rpath,${FLIBROOT} \
+-L${FLIBROOT} \
+-lstdc++ \
+-lgfortran \
+-lgcc_s \
+-lgcc"
+
+
+# ============================================================================
+# Runtime library search path
+#
+# Keep the loaded package libraries ahead of any pre-existing search path.
+# ============================================================================
+
+export LD_LIBRARY_PATH="\
+${HDF5_HOME}/lib:\
+${NETCDF_C_HOME}/lib64:\
+${NETCDF_F_HOME}/lib:\
+${FLIBROOT}:\
+${GCC_RUNTIME_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+
+# ============================================================================
+# Build/install location
+#
+# PREFIX can be exported before sourcing this file if a specific installation
+# directory is required.
+#
+# Otherwise the common Makefile defaults to:
+#
+#     $(CURDIR)/builds
+# ============================================================================
+
+
+# ============================================================================
+# Environment summary
+# ============================================================================
+
+echo
+echo "============================================================"
+echo " EZCDF environment -- Lynx / GCC 13.4.0"
+echo "============================================================"
+echo
+
+echo "Compilers:"
+echo "  FC              = ${FC}"
+echo "  CC              = ${CC}"
+echo "  CXX             = ${CXX}"
+echo
+
+echo "Compiler versions:"
+echo "  $(gfortran --version | head -1)"
+echo "  $(gcc --version | head -1)"
+echo
+
+echo "MPI:"
+echo "  MPI_HOME        = ${MPI_HOME:-not set}"
+echo
+
+echo "NetCDF:"
+echo "  NETCDF_F_HOME   = ${NETCDF_F_HOME}"
+echo "  NETCDF_C_HOME   = ${NETCDF_C_HOME}"
+echo "  NETCDF_MODDIR   = ${NETCDF_MODDIR}"
+echo
+
+echo "HDF5:"
+echo "  HDF5_HOME       = ${HDF5_HOME}"
+echo
+
+echo "GCC runtime:"
+echo "  GCC_RUNTIME_ROOT = ${GCC_RUNTIME_ROOT}"
+echo "  FLIBROOT         = ${FLIBROOT}"
+echo
+
+echo "Compiler flags:"
+echo "  FFLAGS          = ${FFLAGS}"
+echo "  CFLAGS          = ${CFLAGS}"
+echo "  CXXFLAGS        = ${CXXFLAGS}"
+echo
+
+echo "Libraries:"
+echo "  L_NETCDF        = ${L_NETCDF}"
+echo "  L_FLIBS         = ${L_FLIBS}"
+echo "  L_CLIBS         = ${L_CLIBS}"
+echo
+
+echo "LD_LIBRARY_PATH:"
+echo "  ${LD_LIBRARY_PATH}"
+echo
+
+echo "============================================================"
