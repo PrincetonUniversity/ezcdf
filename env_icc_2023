@@ -1,0 +1,17 @@
+# Intel oneAPI 2023.2.0
+module purge
+module load intel/2023.2.0
+module load openmpi/4.1.6-intel-2023.2.0-f6nrfjk
+
+module load openmpi-4.1.6/intel-2023.2.0/hdf5/1.14.6-c77my
+module load openmpi-4.1.6/intel-2023.2.0/netcdf-c/4.9.2-qpqoj
+module load openmpi-4.1.6/intel-2023.2.0/netcdf-fortran/4.6.1-bfskx
+
+export FC=ifort
+export F90=ifort
+export CC=icx
+export CXX=icpx
+
+export FFLAGS="-g -O2 -xCORE-AVX2 -fPIC -traceback"
+export CFLAGS="-g -O2 -xCORE-AVX2 -fPIC"
+export CXXFLAGS="-g -O2 -xCORE-AVX2 -fPIC"
