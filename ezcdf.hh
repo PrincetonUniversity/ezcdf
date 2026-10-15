@@ -86,7 +86,7 @@ private:
 public:
 
   EZcdf(const string fname_in, const string m);
-  ~EZcdf();
+  ~EZcdf() noexcept;
 
   void cdfDefVar(const string varnam, int dimlens[CDF_MAXDIM], string xtype);
 

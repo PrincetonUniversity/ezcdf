@@ -1,0 +1,420 @@
+# ---------------------------------------------------------------------------
+# EZCDF Makefile
+#
+# Common Linux Makefile
+#
+# Supports:
+#   - PPPL Ranger / GCC 13.4.0
+#   - Other GCC installations
+#   - Static and shared libraries
+#   - Fortran and C++ tests
+#
+# Machine-specific configuration is supplied by the environment.
+#
+# Usage:
+#
+#   source ./environ
+#   make show
+#   make
+#   make install
+#
+# MAKE_SO:
+#
+#   Undefined : build static and shared libraries and tests
+#   0         : build static library
+#   1         : build static and shared libraries and tests
+#
+# ---------------------------------------------------------------------------
+
+SHELL := /bin/bash
+
+# ===========================================================================
+# Compilers
+# ===========================================================================
+
+FC  = gfortran
+CC  = gcc
+CXX = g++
+
+# ===========================================================================
+# Archiver
+# ===========================================================================
+
+AR      ?= ar
+ARFLAGS := rcs
+
+# ===========================================================================
+# Source/build directories
+# ===========================================================================
+
+SRCDIR := $(CURDIR)
+
+PREFIX ?= $(SRCDIR)/builds
+
+LIBDIR := $(PREFIX)/lib
+INCDIR := $(PREFIX)/include
+MODDIR := $(PREFIX)/mod
+BINDIR := $(PREFIX)/bin
+
+# ===========================================================================
+# External include directories
+# ===========================================================================
+
+FINCL :=
+
+ifneq ($(strip $(NETCDF_MODDIR)),)
+	FINCL += -I$(NETCDF_MODDIR)
+endif
+
+ifneq ($(strip $(NETCDF_F_HOME)),)
+	FINCL += -I$(NETCDF_F_HOME)/include
+endif
+
+ifneq ($(strip $(NETCDF_C_HOME)),)
+	FINCL += -I$(NETCDF_C_HOME)/include
+endif
+
+ifneq ($(strip $(HDF5_HOME)),)
+	FINCL += -I$(HDF5_HOME)/include
+endif
+
+# ===========================================================================
+# Compiler flags
+# ===========================================================================
+
+FFLAGS   ?= -O2 -g -fPIC
+CFLAGS   ?= -O2 -g -fPIC
+CXXFLAGS ?= -O2 -g -fPIC
+
+LDFLAGS ?=
+
+# ===========================================================================
+# External libraries
+# ===========================================================================
+
+L_NETCDF ?=
+L_FLIBS  ?=
+L_CLIBS  ?=
+
+# ===========================================================================
+# Library names
+# ===========================================================================
+
+LIBAR := libezcdf.a
+LIBSO := libezcdf.so
+
+# ===========================================================================
+# Test executable names
+# ===========================================================================
+
+EXEF90 := eztest
+EXECXX := eztest2
+
+# ===========================================================================
+# Sources
+# ===========================================================================
+
+SRCS := \
+	ezcdf_inqvar.f90 \
+	ezcdf_opncls.f90 \
+	ezcdf_attrib.f90 \
+	ezcdf_genget.f90 \
+	ezcdf_genput.f90 \
+	ezcdf.f90 \
+	handle_err.f90
+
+# ===========================================================================
+# Objects
+# ===========================================================================
+
+OBJS := $(SRCS:.f90=.o)
+
+# ===========================================================================
+# Build selection
+# ===========================================================================
+
+ifeq ($(origin MAKE_SO),undefined)
+
+BUILD_LIBS := $(LIBAR) $(LIBSO)
+BUILD_TESTS := $(EXEF90) $(EXECXX)
+
+else ifeq ($(MAKE_SO),1)
+
+BUILD_LIBS := $(LIBAR) $(LIBSO)
+BUILD_TESTS := $(EXEF90) $(EXECXX)
+
+else
+
+BUILD_LIBS := $(LIBAR)
+BUILD_TESTS :=
+
+endif
+
+# ===========================================================================
+# Parallel compilation
+#
+# EZCDF uses Fortran modules. Until explicit module dependencies are
+# introduced, serialize compilation to avoid missing .mod files.
+# ===========================================================================
+
+.NOTPARALLEL:
+
+# ===========================================================================
+# Phony targets
+# ===========================================================================
+
+.PHONY: \
+	all \
+	check-env \
+	show \
+	tests \
+	install \
+	uninstall \
+	clean \
+	clobber
+
+# ===========================================================================
+# Main target
+# ===========================================================================
+
+all: check-env $(BUILD_LIBS) $(BUILD_TESTS)
+
+# ===========================================================================
+# Environment validation
+# ===========================================================================
+
+check-env:
+	@command -v "$(FC)" >/dev/null 2>&1 || { \
+		echo "ERROR: Fortran compiler not found: $(FC)"; \
+		exit 1; \
+	}
+	@command -v "$(CXX)" >/dev/null 2>&1 || { \
+		echo "ERROR: C++ compiler not found: $(CXX)"; \
+		exit 1; \
+	}
+	@test -n "$(NETCDF_F_HOME)" || { \
+		echo "ERROR: NETCDF_F_HOME is not set"; \
+		exit 1; \
+	}
+	@test -n "$(NETCDF_C_HOME)" || { \
+		echo "ERROR: NETCDF_C_HOME is not set"; \
+		exit 1; \
+	}
+	@test -n "$(L_NETCDF)" || { \
+		echo "ERROR: L_NETCDF is not set"; \
+		exit 1; \
+	}
+
+# ===========================================================================
+# Display configuration
+# ===========================================================================
+
+show:
+	@echo
+	@echo "============================================================"
+	@echo " EZCDF build configuration"
+	@echo "============================================================"
+	@echo
+	@echo "Source/build:"
+	@echo "  SRCDIR         = $(SRCDIR)"
+	@echo "  PREFIX         = $(PREFIX)"
+	@echo "  LIBDIR         = $(LIBDIR)"
+	@echo "  MODDIR         = $(MODDIR)"
+	@echo "  INCDIR         = $(INCDIR)"
+	@echo "  BINDIR         = $(BINDIR)"
+	@echo
+	@echo "Build:"
+	@echo "  MAKE_SO        = $(MAKE_SO)"
+	@echo "  BUILD_LIBS     = $(BUILD_LIBS)"
+	@echo "  BUILD_TESTS    = $(BUILD_TESTS)"
+	@echo
+	@echo "Compilers:"
+	@echo "  FC             = $(FC)"
+	@echo "  CC             = $(CC)"
+	@echo "  CXX            = $(CXX)"
+	@echo
+	@echo "Compiler flags:"
+	@echo "  FFLAGS         = $(FFLAGS)"
+	@echo "  CFLAGS         = $(CFLAGS)"
+	@echo "  CXXFLAGS       = $(CXXFLAGS)"
+	@echo "  LDFLAGS        = $(LDFLAGS)"
+	@echo
+	@echo "NetCDF/HDF5:"
+	@echo "  NETCDF_F_HOME  = $(NETCDF_F_HOME)"
+	@echo "  NETCDF_C_HOME  = $(NETCDF_C_HOME)"
+	@echo "  NETCDF_MODDIR  = $(NETCDF_MODDIR)"
+	@echo "  HDF5_HOME      = $(HDF5_HOME)"
+	@echo "  FINCL          = $(FINCL)"
+	@echo "  L_NETCDF       = $(L_NETCDF)"
+	@echo
+	@echo "Compiler runtime:"
+	@echo "  FLIBROOT       = $(FLIBROOT)"
+	@echo "  L_FLIBS        = $(L_FLIBS)"
+	@echo "  L_CLIBS        = $(L_CLIBS)"
+	@echo
+	@echo "============================================================"
+
+# ===========================================================================
+# Static library
+# ===========================================================================
+
+$(LIBAR): $(OBJS)
+	@echo
+	@echo "Building EZCDF static library"
+	@echo "  $@"
+	@echo
+	@rm -f $@
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+
+# ===========================================================================
+# Shared library
+# ===========================================================================
+
+$(LIBSO): $(OBJS)
+	@echo
+	@echo "Building EZCDF shared library"
+	@echo "  $@"
+	@echo
+	@rm -f $@
+	$(FC) -shared \
+		$(LDFLAGS) \
+		-o $@ \
+		$(OBJS) \
+		$(L_NETCDF) \
+		$(L_FLIBS)
+
+# ===========================================================================
+# Fortran test executable
+# ===========================================================================
+
+$(EXEF90): $(LIBSO) $(EXEF90).f90
+	@echo
+	@echo "Building $(EXEF90)"
+	@echo
+	$(FC) \
+		$(FFLAGS) \
+		$(FINCL) \
+		$(EXEF90).f90 \
+		-o $@ \
+		$(LDFLAGS) \
+		-L$(SRCDIR) \
+		-lezcdf \
+		-Wl,-rpath,$(SRCDIR) \
+		$(L_NETCDF) \
+		$(L_FLIBS)
+
+# ===========================================================================
+# C++ test executable
+# ===========================================================================
+
+$(EXECXX): $(LIBSO) $(EXECXX).cc
+	@echo
+	@echo "Building $(EXECXX)"
+	@echo
+	$(CXX) \
+		$(CXXFLAGS) \
+		$(FINCL) \
+		$(EXECXX).cc \
+		-o $@ \
+		$(LDFLAGS) \
+		-L$(SRCDIR) \
+		-lezcdf \
+		-Wl,-rpath,$(SRCDIR) \
+		$(L_NETCDF) \
+		$(L_CLIBS) \
+		$(L_FLIBS)
+
+# ===========================================================================
+# Fortran object compilation
+# ===========================================================================
+
+%.o: %.f90
+	$(FC) \
+		$(FFLAGS) \
+		$(FINCL) \
+		-c $< \
+		-o $@
+
+# ===========================================================================
+# Tests
+# ===========================================================================
+
+tests: check-env $(LIBSO) $(EXEF90) $(EXECXX)
+
+# ===========================================================================
+# Install
+# ===========================================================================
+
+install: all
+	@echo
+	@echo "Installing EZCDF"
+	@echo "  PREFIX = $(PREFIX)"
+	@echo
+
+	@mkdir -p $(LIBDIR)
+	@mkdir -p $(INCDIR)
+	@mkdir -p $(MODDIR)
+	@mkdir -p $(BINDIR)
+
+	@cp ezcdf.hh $(INCDIR)
+
+	@if ls *.mod >/dev/null 2>&1; then \
+		cp *.mod $(MODDIR); \
+	fi
+
+	@if [ -d ref ]; then \
+		rm -rf $(PREFIX)/ref; \
+		cp -r ref $(PREFIX)/ref; \
+	fi
+
+	@for lib in $(BUILD_LIBS); do \
+		cp "$$lib" "$(LIBDIR)/"; \
+	done
+
+	@if [ -f $(EXEF90) ] && \
+	    [ -n "$(BUILD_TESTS)" ]; then \
+		cp $(EXEF90) $(BINDIR); \
+	fi
+
+	@if [ -f $(EXECXX) ] && \
+	    [ -n "$(BUILD_TESTS)" ]; then \
+		cp $(EXECXX) $(BINDIR); \
+	fi
+
+	@echo
+	@echo "Installed:"
+	@echo "  $(LIBDIR)"
+	@echo "  $(MODDIR)"
+	@echo "  $(INCDIR)"
+	@echo "  $(BINDIR)"
+	@echo
+
+# ===========================================================================
+# Uninstall
+# ===========================================================================
+
+uninstall:
+	@echo "Removing EZCDF installation:"
+	@echo "  $(PREFIX)"
+	@rm -rf $(PREFIX)
+
+# ===========================================================================
+# Clean
+# ===========================================================================
+
+clean:
+	@echo "Cleaning EZCDF objects and modules"
+	@rm -f *~
+	@rm -f $(OBJS)
+	@rm -f *.mod
+
+# ===========================================================================
+# Complete cleanup
+# ===========================================================================
+
+clobber: clean
+	@echo "Removing EZCDF libraries and test executables"
+	@rm -f $(LIBAR)
+	@rm -f $(LIBSO)
+	@rm -f $(EXEF90)
+	@rm -f $(EXECXX)
